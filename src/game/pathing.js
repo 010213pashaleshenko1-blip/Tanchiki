@@ -13,6 +13,7 @@ export function nearest(list, from, predicate = () => true) {
 
   for (const item of list) {
     if (!item || !predicate(item)) continue;
+    if (from?.kind === 'drop' && (item.bot || item.guard)) continue;
     const d = distance(from, item);
     if (d < bestDistance) {
       best = item;
@@ -28,9 +29,23 @@ export function levelSpeed(tank, baseSpeed) {
 }
 
 export function safePosition(preferX = rand(420, MAP_W - 420), preferY = rand(420, MAP_H - 420), radius = 34) {
-  for (let i = 0; i < 90; i++) {
-    const x = clamp(preferX + rand(-900, 900), 420, MAP_W - 420);
-    const y = clamp(preferY + rand(-900, 900), 420, MAP_H - 420);
+  const px = clamp(preferX, 420, MAP_W - 420);
+  const py = clamp(preferY, 420, MAP_H - 420);
+
+  if (!collidesWithBlock(px, py, radius)) return { x: px, y: py };
+
+  for (let ring = 16; ring <= 220; ring += 18) {
+    for (let step = 0; step < 16; step++) {
+      const a = (Math.PI * 2 * step) / 16 + rand(-0.08, 0.08);
+      const x = clamp(px + Math.cos(a) * ring, 420, MAP_W - 420);
+      const y = clamp(py + Math.sin(a) * ring, 420, MAP_H - 420);
+      if (!collidesWithBlock(x, y, radius)) return { x, y };
+    }
+  }
+
+  for (let i = 0; i < 80; i++) {
+    const x = clamp(px + rand(-420, 420), 420, MAP_W - 420);
+    const y = clamp(py + rand(-420, 420), 420, MAP_H - 420);
     if (!collidesWithBlock(x, y, radius)) return { x, y };
   }
 
