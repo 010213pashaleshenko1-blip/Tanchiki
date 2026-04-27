@@ -102,6 +102,7 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
   const knobRef = useRef(null);
   const keys = useRef(new Set());
   const pointer = useRef({ x: 5000, y: 5000, down: false });
+  const aimTouchId = useRef(null);
   const camera = useRef({ x: 0, y: 0, w: 1, h: 1 });
   const joy = useRef({ id: null, dx: 0, dy: 0 });
   const me = useRef({
@@ -218,16 +219,25 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
       joy.current = { id: null, dx: 0, dy: 0 };
       knob.style.transform = 'translate3d(0,0,0)';
     };
+    const blockJoystickEvent = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
     const down = (e) => {
+      blockJoystickEvent(e);
       joy.current.id = e.pointerId;
       base.setPointerCapture?.(e.pointerId);
       setStick(e.clientX, e.clientY);
     };
     const move = (e) => {
-      if (joy.current.id === e.pointerId) setStick(e.clientX, e.clientY);
+      if (joy.current.id !== e.pointerId) return;
+      blockJoystickEvent(e);
+      setStick(e.clientX, e.clientY);
     };
     const up = (e) => {
-      if (joy.current.id === e.pointerId) reset();
+      if (joy.current.id !== e.pointerId) return;
+      blockJoystickEvent(e);
+      reset();
     };
     base.addEventListener('pointerdown', down);
     base.addEventListener('pointermove', move);
@@ -266,16 +276,43 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
       const r = canvas.getBoundingClientRect();
       return { x: camera.current.x + clientX - r.left, y: camera.current.y + clientY - r.top };
     };
+    const getTouchById = (touches, id) => {
+      for (const t of touches) if (t.identifier === id) return t;
+      return null;
+    };
+    const setAimFromPoint = (point) => {
+      if (!point) return;
+      pointer.current = { ...pointer.current, ...toWorld(point.clientX, point.clientY) };
+    };
     const moveAim = (e) => {
-      const p = e.touches?.[0] || e;
-      pointer.current = { ...pointer.current, ...toWorld(p.clientX, p.clientY) };
+      if (e.changedTouches) {
+        const t = getTouchById(e.changedTouches, aimTouchId.current);
+        if (!t) return;
+        setAimFromPoint(t);
+        return;
+      }
+      setAimFromPoint(e);
     };
     const aimDown = (e) => {
-      moveAim(e);
+      if (e.target.closest?.('.joystick, .fireButton, .topbar')) return;
+      if (e.changedTouches) {
+        const t = e.changedTouches[0];
+        aimTouchId.current = t.identifier;
+        setAimFromPoint(t);
+      } else {
+        setAimFromPoint(e);
+      }
       pointer.current.down = true;
       fire();
     };
-    const aimUp = () => { pointer.current.down = false; };
+    const aimUp = (e) => {
+      if (e.changedTouches && aimTouchId.current !== null) {
+        const t = getTouchById(e.changedTouches, aimTouchId.current);
+        if (!t) return;
+        aimTouchId.current = null;
+      }
+      pointer.current.down = false;
+    };
 
     const fire = () => {
       const now = performance.now();
@@ -314,6 +351,7 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
     canvas.addEventListener('touchmove', moveAim, { passive: true });
     addEventListener('mouseup', aimUp);
     addEventListener('touchend', aimUp);
+    addEventListener('touchcancel', aimUp);
     raf = requestAnimationFrame(loop);
 
     return () => {
@@ -324,6 +362,7 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
       canvas.removeEventListener('touchmove', moveAim);
       removeEventListener('mouseup', aimUp);
       removeEventListener('touchend', aimUp);
+      removeEventListener('touchcancel', aimUp);
     };
   }, []);
 
@@ -404,7 +443,7 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
       </header>
       <canvas ref={canvasRef} className="gameCanvas" />
       <div className="joystick" ref={joyRef}><div className="joystickRing" /><div className="joystickKnob" ref={knobRef} /></div>
-      <button className="fireButton" onPointerDown={() => { pointer.current.down = true; }} onPointerUp={() => { pointer.current.down = false; }} onPointerCancel={() => { pointer.current.down = false; }}>FIRE</button>
+      <button className="fireButton" onPointerDown={(e) => { e.stopPropagation(); pointer.current.down = true; }} onPointerUp={(e) => { e.stopPropagation(); pointer.current.down = false; }} onPointerCancel={(e) => { e.stopPropagation(); pointer.current.down = false; }}>FIRE</button>
     </div>
   );
 }
