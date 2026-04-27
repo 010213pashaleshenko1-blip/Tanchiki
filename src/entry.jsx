@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './GameV6.jsx';
+import App from './GameV7.jsx';
 import './styles.css';
 
 createRoot(document.getElementById('root')).render(<App />);
