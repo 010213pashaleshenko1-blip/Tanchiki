@@ -9,6 +9,8 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const MAP_W = 10000;
 const MAP_H = 10000;
 const PLAYER_SIZE = 34;
+const TANK_RADIUS = 22;
+const BULLET_RADIUS = 5;
 const SPEED = 260;
 const FIRE_COOLDOWN = 420;
 const PLAYER_TTL = 2500;
@@ -124,25 +126,28 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
   const [hp, setHp] = useState(100);
   const [mobile, setMobile] = useState(isMobileLike());
   const [portrait, setPortrait] = useState(innerHeight > innerWidth && isMobileLike());
-  const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement));
 
   const enterFullscreen = async () => {
     try {
-      const el = document.documentElement;
-      if (!document.fullscreenElement) await el.requestFullscreen?.();
-      await screen.orientation?.lock?.('landscape');
-      setFullscreen(Boolean(document.fullscreenElement));
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+      if (innerHeight > innerWidth) await screen.orientation?.lock?.('landscape');
       setPortrait(innerHeight > innerWidth && isMobileLike());
     } catch {
       setPortrait(innerHeight > innerWidth && isMobileLike());
     }
   };
 
+  const leaveToMenu = async () => {
+    try { await screen.orientation?.lock?.('portrait'); } catch {}
+    try { if (document.fullscreenElement) await document.exitFullscreen?.(); } catch {}
+    try { screen.orientation?.unlock?.(); } catch {}
+    onLeave();
+  };
+
   useEffect(() => {
     const updateScreen = () => {
       setMobile(isMobileLike());
       setPortrait(innerHeight > innerWidth && isMobileLike());
-      setFullscreen(Boolean(document.fullscreenElement));
     };
     updateScreen();
     addEventListener('resize', updateScreen);
@@ -377,8 +382,12 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
     const len = Math.hypot(dx, dy);
     if (len > 0.01) {
       const power = clamp(len, 0, 1);
-      me.current.x = clamp(me.current.x + dx / len * SPEED * power * dt, PLAYER_SIZE, MAP_W - PLAYER_SIZE);
-      me.current.y = clamp(me.current.y + dy / len * SPEED * power * dt, PLAYER_SIZE, MAP_H - PLAYER_SIZE);
+      const stepX = dx / len * SPEED * power * dt;
+      const stepY = dy / len * SPEED * power * dt;
+      const nextX = clamp(me.current.x + stepX, PLAYER_SIZE, MAP_W - PLAYER_SIZE);
+      if (!collidesWithBlock(nextX, me.current.y, TANK_RADIUS)) me.current.x = nextX;
+      const nextY = clamp(me.current.y + stepY, PLAYER_SIZE, MAP_H - PLAYER_SIZE);
+      if (!collidesWithBlock(me.current.x, nextY, TANK_RADIUS)) me.current.y = nextY;
     }
     me.current.angle = Math.atan2(pointer.current.y - me.current.y, pointer.current.x - me.current.x);
     if (pointer.current.down) fire();
@@ -390,7 +399,7 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
 
     bullets.current = bullets.current
       .map((b) => ({ ...b, x: b.x + b.vx * dt, y: b.y + b.vy * dt }))
-      .filter((b) => now - b.born < 2200 && b.x > -80 && b.x < MAP_W + 80 && b.y > -80 && b.y < MAP_H + 80);
+      .filter((b) => now - b.born < 2200 && b.x > -80 && b.x < MAP_W + 80 && b.y > -80 && b.y < MAP_H + 80 && !collidesWithBlock(b.x, b.y, BULLET_RADIUS));
 
     for (const b of bullets.current) {
       if (b.owner !== me.current.id) continue;
@@ -438,14 +447,24 @@ function Game({ supabase, playerName, roomCode, onLeave }) {
       <header className="topbar">
         <div><b>Tanchiki</b> / room: <code>{roomCode}</code> / map: <code>1000×1000м</code></div>
         <div className="stats"><span>{status}</span><span>Игроков: {playersCount}</span><span>HP: {hp}</span></div>
-        <button className="small fullscreenBtn" onClick={enterFullscreen}>{fullscreen ? 'Fullscreen ON' : 'Fullscreen'}</button>
-        <button className="small" onClick={onLeave}>Выйти</button>
+        <button className="small" onClick={leaveToMenu}>Выйти</button>
       </header>
       <canvas ref={canvasRef} className="gameCanvas" />
       <div className="joystick" ref={joyRef}><div className="joystickRing" /><div className="joystickKnob" ref={knobRef} /></div>
       <button className="fireButton" onPointerDown={(e) => { e.stopPropagation(); pointer.current.down = true; }} onPointerUp={(e) => { e.stopPropagation(); pointer.current.down = false; }} onPointerCancel={(e) => { e.stopPropagation(); pointer.current.down = false; }}>FIRE</button>
     </div>
   );
+}
+
+function circleRectHit(cx, cy, radius, rect) {
+  const [x, y, w, h] = rect;
+  const nx = clamp(cx, x, x + w);
+  const ny = clamp(cy, y, y + h);
+  return Math.hypot(cx - nx, cy - ny) < radius;
+}
+
+function collidesWithBlock(x, y, radius) {
+  return BLOCKS.some((block) => circleRectHit(x, y, radius, block));
 }
 
 function drawGround(ctx, cam) {
