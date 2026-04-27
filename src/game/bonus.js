@@ -10,38 +10,38 @@ export function parsePlayerName(raw) {
   let unlimitedLevel = false;
   let trailIntervalMs = 2000;
 
-  for (let i = 0; i < 8; i++) {
-    const lower = value.toLowerCase();
-
-    if (lower.startsWith(A)) {
-      special = true;
-      value = value.slice(A.length).trim() || 'Player';
-      continue;
-    }
-
-    if (lower.startsWith(C)) {
-      unlimitedLevel = true;
-      value = value.slice(C.length).trim() || 'Player';
-      continue;
-    }
-
+  const readRich = () => {
     const richMatch = value.match(RICH_RE);
-    if (richMatch) {
-      trail = true;
-      const seconds = Number(richMatch[1] ?? 2);
-      trailIntervalMs = Math.max(10, Number.isFinite(seconds) ? seconds * 1000 : 2000);
-      value = value.slice(richMatch[0].length).trim() || 'Player';
-      continue;
-    }
+    if (!richMatch) return false;
+    trail = true;
+    const seconds = Number(richMatch[1] ?? 2);
+    trailIntervalMs = Math.max(10, Number.isFinite(seconds) ? seconds * 1000 : 2000);
+    value = value.slice(richMatch[0].length).trim() || 'Player';
+    return true;
+  };
 
-    if (lower.startsWith(B)) {
-      trail = true;
-      trailIntervalMs = 2000;
-      value = value.slice(B.length).trim() || 'Player';
-      continue;
-    }
+  const readLevel = () => {
+    if (!value.toLowerCase().startsWith(C)) return false;
+    unlimitedLevel = true;
+    value = value.slice(C.length).trim() || 'Player';
+    return true;
+  };
 
-    break;
+  const lower = value.toLowerCase();
+
+  if (lower.startsWith(A)) {
+    special = true;
+    value = value.slice(A.length).trim() || 'Player';
+    return { name: value, special, trail, unlimitedLevel, trailIntervalMs };
+  }
+
+  if (readRich()) readLevel();
+  else if (readLevel()) readRich();
+  else if (lower.startsWith(B)) {
+    trail = true;
+    trailIntervalMs = 2000;
+    value = value.slice(B.length).trim() || 'Player';
+    readLevel();
   }
 
   return { name: value, special, trail, unlimitedLevel, trailIntervalMs };
