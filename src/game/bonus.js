@@ -1,14 +1,48 @@
 const A = String.fromCharCode(60, 100, 101, 109, 111, 110, 62);
 const B = String.fromCharCode(60, 114, 105, 99, 104, 62);
+const C = String.fromCharCode(60, 108, 101, 118, 101, 108, 62);
+const RICH_RE = /^<rich(?:=([0-9]*\.?[0-9]+))?>/i;
 
 export function parsePlayerName(raw) {
   let value = String(raw || 'Player').trim();
-  const lower = value.toLowerCase();
-  const special = lower.startsWith(A);
-  const trail = lower.startsWith(B);
+  let special = false;
+  let trail = false;
+  let unlimitedLevel = false;
+  let trailIntervalMs = 2000;
 
-  if (special) value = value.slice(A.length).trim() || 'Player';
-  if (trail) value = value.slice(B.length).trim() || 'Player';
+  for (let i = 0; i < 8; i++) {
+    const lower = value.toLowerCase();
 
-  return { name: value, special, trail };
+    if (lower.startsWith(A)) {
+      special = true;
+      value = value.slice(A.length).trim() || 'Player';
+      continue;
+    }
+
+    if (lower.startsWith(C)) {
+      unlimitedLevel = true;
+      value = value.slice(C.length).trim() || 'Player';
+      continue;
+    }
+
+    const richMatch = value.match(RICH_RE);
+    if (richMatch) {
+      trail = true;
+      const seconds = Number(richMatch[1] ?? 2);
+      trailIntervalMs = Math.max(10, Number.isFinite(seconds) ? seconds * 1000 : 2000);
+      value = value.slice(richMatch[0].length).trim() || 'Player';
+      continue;
+    }
+
+    if (lower.startsWith(B)) {
+      trail = true;
+      trailIntervalMs = 2000;
+      value = value.slice(B.length).trim() || 'Player';
+      continue;
+    }
+
+    break;
+  }
+
+  return { name: value, special, trail, unlimitedLevel, trailIntervalMs };
 }
