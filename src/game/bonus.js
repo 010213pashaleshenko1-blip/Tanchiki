@@ -4,6 +4,10 @@ const C = String.fromCharCode(60, 108, 101, 118, 101, 108, 62);
 const RICH_RE = /^<rich(?:=([0-9]*\.?[0-9]+))?>/i;
 const LEVEL_RE = /^<level(?:=([0-9]+))?>/i;
 
+export const RICH_MIN_INTERVAL_MS = 700;
+export const LEVEL_MAX = 1000;
+export const LEVEL_DROP_MAX_XP = 20;
+
 export function parsePlayerName(raw) {
   let value = String(raw || 'Player').trim();
   let special = false;
@@ -17,7 +21,7 @@ export function parsePlayerName(raw) {
     if (!richMatch) return false;
     trail = true;
     const seconds = Number(richMatch[1] ?? 2);
-    trailIntervalMs = Math.max(10, Number.isFinite(seconds) ? seconds * 1000 : 2000);
+    trailIntervalMs = Math.max(RICH_MIN_INTERVAL_MS, Number.isFinite(seconds) ? seconds * 1000 : 2000);
     value = value.slice(richMatch[0].length).trim() || 'Player';
     return true;
   };
@@ -27,7 +31,7 @@ export function parsePlayerName(raw) {
     if (!levelMatch) return false;
     unlimitedLevel = true;
     const maxXp = Number(levelMatch[1] ?? 10);
-    trailMaxXp = Math.max(1, Number.isFinite(maxXp) ? Math.floor(maxXp) : 10);
+    trailMaxXp = Math.min(LEVEL_DROP_MAX_XP, Math.max(1, Number.isFinite(maxXp) ? Math.floor(maxXp) : 10));
     value = value.slice(levelMatch[0].length).trim() || 'Player';
     return true;
   };
